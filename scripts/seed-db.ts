@@ -2,7 +2,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 
-const client = new DynamoDBClient({ region: "eu-north-1" });
+const client = new DynamoDBClient({ region: "eu-central-1" });
 const dynamoDB = DynamoDBDocumentClient.from(client);
 
 // Griffon dogs 🐶
@@ -41,7 +41,7 @@ async function seed() {
 
   for (const stock of stocks) {
     await dynamoDB.send(
-      new PutCommand({ TableName: "shop_stocks", Item: stock }),
+      new PutCommand({ TableName: "shop_stock", Item: stock }),
     );
     console.log(`Added stock for a dog: ${stock.product_id}`);
   }
