@@ -4,24 +4,28 @@ import { Readable } from "stream";
 import csv from "csv-parser";
 
 export const handler = async (event: S3Event): Promise<void> => {
-  console.log(
-    JSON.stringify({
-      type: "REQUEST",
-      event,
-    }),
-  );
-
-  console.log("S3 event received:", JSON.stringify(event));
-
-  for (const record of event.Records) {
-    const bucketName = record.s3.bucket.name;
-    const objectKey = decodeURIComponent(
-      record.s3.object.key.replace(/\+/g, " "),
+  try {
+    console.log(
+      JSON.stringify({
+        type: "REQUEST-2",
+        event,
+      }),
     );
 
-    console.log(`Reading file: s3://${bucketName}/${objectKey}`);
+    console.log("S3 event received:", JSON.stringify(event));
 
-    await parseCSV(bucketName, objectKey);
+    for (const record of event.Records) {
+      const bucketName = record.s3.bucket.name;
+      const objectKey = decodeURIComponent(
+        record.s3.object.key.replace(/\+/g, " "),
+      );
+
+      console.log(`Reading file: s3://${bucketName}/${objectKey}`);
+
+      await parseCSV(bucketName, objectKey);
+    }
+  } catch (e: any) {
+    console.log("Some error happened: ", e.message || e);
   }
 };
 
@@ -41,15 +45,16 @@ async function parseCSV(bucketName: string, objectKey: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     stream
       .pipe(csv())
-      .on("data", (data: Record<string, string>) => {
+      .on("data", (data: any) => {
         console.log("CSV chunk:", data);
       })
       .on("error", (error: Error) => {
         console.error("Parsing error:", error);
         reject(error);
       })
-      .on("end", async () => {
-        console.error("Parsing finished");
+      .on("end", () => {
+        console.log("Parsing finished");
+        resolve();
       });
   });
 }

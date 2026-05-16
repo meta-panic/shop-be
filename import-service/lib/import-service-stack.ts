@@ -34,7 +34,7 @@ export class ImportServiceStack extends cdk.Stack {
 
     const parseFileLambda = new NodejsFunction(this, "parseProductsFile", {
       runtime: lambda.Runtime.NODEJS_20_X,
-      entry: path.join(__dirname, "lambdas", "importProductsFile.ts"),
+      entry: path.join(__dirname, "lambdas", "importFileParser.ts"),
       handler: "handler",
       environment: {
         BUCKET_NAME: importBucket.bucketName,
