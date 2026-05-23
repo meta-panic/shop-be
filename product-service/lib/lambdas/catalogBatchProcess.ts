@@ -5,12 +5,15 @@ import {
   DynamoDBDocumentClient,
   TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 
 const client = new DynamoDBClient({});
 const dynamoDB = DynamoDBDocumentClient.from(client);
+const snsClient = new SNSClient({});
 
 const PRODUCTS_TABLE = process.env.PRODUCTS_TABLE!;
 const STOCKS_TABLE = process.env.STOCKS_TABLE!;
+const SNS_GRIFFON_TOPIC_ARN = process.env.SNS_GRIFFON_TOPIC_ARN!;
 
 export interface ProductInput {
   title: string;
@@ -27,12 +30,36 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
     try {
       const body = JSON.parse(record.body) as ProductInput;
 
-      if (!body.title || typeof body.title !== "string" || body.title.trim() === "") {
+      if (
+        !body.title ||
+        typeof body.title !== "string" ||
+        body.title.trim() === ""
+      ) {
         throw new Error("Invalid or missing product title");
       }
 
       const id = await createProductInDB(body);
       console.log(`Created product by id ${id}\nData: ${JSON.stringify(body)}`);
+
+      await snsClient.send(
+        new PublishCommand({
+          TopicArn: SNS_GRIFFON_TOPIC_ARN,
+          Subject: "New griffon created",
+          Message: JSON.stringify({
+            message: "Griffon was successfully created",
+            product: { ...body, id },
+            timestamp: new Date().toISOString(),
+          }),
+          MessageAttributes: {
+            count: {
+              DataType: "Number",
+              StringValue: String(body.count),
+            },
+          },
+        }),
+      );
+
+      console.log(`SNS notification sent for product: ${body.title}`);
     } catch (error: any) {
       console.error(
         `Failed to process record ${record.messageId}:`,

@@ -7,6 +7,8 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as snsSubscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 
 export class ShopBeStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -88,6 +90,30 @@ export class ShopBeStack extends cdk.Stack {
       new apigateway.LambdaIntegration(createProductLambda),
     );
 
+    const createProductTopic = new sns.Topic(this, "CreateProductTopic", {
+      topicName: "createProductTopic",
+    });
+    // for count === 0
+    createProductTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription("ritaritarita2013@gmail.com", {
+        filterPolicy: {
+          count: sns.SubscriptionFilter.numericFilter({
+            lessThan: 1,
+          }),
+        },
+      }),
+    );
+    // count > 0
+    createProductTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription("alarmistul2@gmail.com", {
+        filterPolicy: {
+          count: sns.SubscriptionFilter.numericFilter({
+            greaterThan: 0,
+          }),
+        },
+      }),
+    );
+
     const itemsQueue = new sqs.Queue(this, "catalogItemsQueue", {});
     const catalogBatchProcessLambda = new NodejsFunction(
       this,
@@ -99,9 +125,11 @@ export class ShopBeStack extends cdk.Stack {
         environment: {
           PRODUCTS_TABLE: "shop_products",
           STOCKS_TABLE: "shop_stock",
+          SNS_GRIFFON_TOPIC_ARN: createProductTopic.topicArn,
         },
       },
     );
+    createProductTopic.grantPublish(catalogBatchProcessLambda);
     productsTable.grantWriteData(catalogBatchProcessLambda);
     stocksTable.grantWriteData(catalogBatchProcessLambda);
     itemsQueue.grantConsumeMessages(catalogBatchProcessLambda);
@@ -117,6 +145,7 @@ export class ShopBeStack extends cdk.Stack {
       value: itemsQueue.queueUrl,
       exportName: "CatalogQueueUrl",
     });
+
     new cdk.CfnOutput(this, "CatalogQueueArn", {
       value: itemsQueue.queueArn,
       exportName: "CatalogQueueArn",
