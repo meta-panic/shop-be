@@ -4,7 +4,9 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as path from "node:path";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
 
 export class ShopBeStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -85,6 +87,40 @@ export class ShopBeStack extends cdk.Stack {
       "POST",
       new apigateway.LambdaIntegration(createProductLambda),
     );
+
+    const itemsQueue = new sqs.Queue(this, "catalogItemsQueue", {});
+    const catalogBatchProcessLambda = new NodejsFunction(
+      this,
+      "catalogBatchProcess",
+      {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: "handler",
+        entry: path.join(__dirname, "./lambdas/catalogBatchProcess.ts"),
+        environment: {
+          PRODUCTS_TABLE: "shop_products",
+          STOCKS_TABLE: "shop_stock",
+        },
+      },
+    );
+    productsTable.grantWriteData(catalogBatchProcessLambda);
+    stocksTable.grantWriteData(catalogBatchProcessLambda);
+    itemsQueue.grantConsumeMessages(catalogBatchProcessLambda);
+    catalogBatchProcessLambda.addEventSource(
+      new lambdaEventSources.SqsEventSource(itemsQueue, {
+        batchSize: 5,
+        reportBatchItemFailures: true,
+        maxBatchingWindow: cdk.Duration.seconds(30),
+      }),
+    );
+
+    new cdk.CfnOutput(this, "CatalogQueueUrl", {
+      value: itemsQueue.queueUrl,
+      exportName: "CatalogQueueUrl",
+    });
+    new cdk.CfnOutput(this, "CatalogQueueArn", {
+      value: itemsQueue.queueArn,
+      exportName: "CatalogQueueArn",
+    });
 
     new cdk.CfnOutput(this, "ProductsApiUrl", {
       value: api.url,
