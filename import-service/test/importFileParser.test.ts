@@ -1,14 +1,18 @@
 import { handler } from "../lib/lambdas/importFileParser";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { mockClient } from "aws-sdk-client-mock";
 import { S3Event } from "aws-lambda";
 import { Readable } from "stream";
 
 const s3Mock = mockClient(S3Client);
+const sqsMock = mockClient(SQSClient);
 
 describe("importFileParser handler", () => {
   beforeEach(() => {
     s3Mock.reset();
+    sqsMock.reset();
+    process.env.SQS_QUEUE_URL = "https://sqs.queue.url";
     jest.clearAllMocks();
   });
 
@@ -36,6 +40,7 @@ describe("importFileParser handler", () => {
     s3Mock.on(GetObjectCommand).resolves({
       Body: stream as any,
     });
+    sqsMock.on(SendMessageCommand).resolves({});
 
     const consoleSpy = jest.spyOn(console, "log").mockImplementation();
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
@@ -46,6 +51,12 @@ describe("importFileParser handler", () => {
     expect(s3Mock.commandCalls(GetObjectCommand)[0].args[0].input).toEqual({
       Bucket: bucketName,
       Key: objectKey,
+    });
+
+    expect(sqsMock.commandCalls(SendMessageCommand).length).toBe(2);
+    expect(sqsMock.commandCalls(SendMessageCommand)[0].args[0].input).toEqual({
+      QueueUrl: expect.any(String),
+      MessageBody: JSON.stringify({ name: "Product 1", price: "10" }),
     });
 
     expect(consoleSpy).toHaveBeenCalledWith("CSV chunk:", {
