@@ -64,13 +64,35 @@ export class ImportServiceStack extends cdk.Stack {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ["*"],
       },
     });
 
     const importResource = api.root.addResource("import");
+
+    const basicAuthorizerArn = cdk.Fn.importValue("BasicAuthorizerArn");
+    const basicAuthorizerLambda = lambda.Function.fromFunctionArn(
+      this,
+      "BasicAuthorizerLambda",
+      basicAuthorizerArn,
+    );
+
+    const basicAuthorizer = new apigateway.TokenAuthorizer(
+      this,
+      "BasicAuthorizer",
+      {
+        handler: basicAuthorizerLambda,
+        identitySource: "method.request.header.Authorization",
+        resultsCacheTtl: cdk.Duration.seconds(0),
+      },
+    );
     importResource.addMethod(
       "GET",
       new apigateway.LambdaIntegration(importProductsFileLambda),
+      {
+        authorizer: basicAuthorizer,
+        authorizationType: apigateway.AuthorizationType.CUSTOM,
+      },
     );
 
     new cdk.CfnOutput(this, "ImportApiUrl", {
